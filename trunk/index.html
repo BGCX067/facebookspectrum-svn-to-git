@@ -1,0 +1,722 @@
+<html xmlns:fb="http://www.facebook.com/2008/fbml">
+<head>
+<title>Spectrum</title>
+
+<script type="text/javascript" src="https://www.google.com/jsapi"></script>
+<script type="text/javascript" src="https://apis.google.com/js/plusone.js"></script>
+<script type="text/javascript" src="https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=false"></script>
+<script src="http://www.simile-widgets.org/timeline/api/timeline-api.js" type="text/javascript"></script>
+<!--  
+<script type="text/javascript" src="yearview.js"></script>
+<script type="text/javascript" src="visualization.js"></script>
+<script type="text/javascript" src="timeline.js"></script>
+<script type="text/javascript" src="compact-painter2.js"></script>
+<script type="text/javascript" src="UProgressBar.js"></script>
+<script type="text/javascript" src="wordcumulus.js"></script>
+<script type="text/javascript" src="swfobject.js"></script>
+<script type="text/javascript" src="spectrum.js"></script>
+<script type="text/javascript" src="search.js"></script>
+<script type="text/javascript" src="activity.js"></script>
+<script type="text/javascript" src="export.js"></script>
+-->
+<link rel="shortcut icon" href="/svn/trunk/favicon.ico" type="image/x-icon" />
+<link href='http://fonts.googleapis.com/css?family=Averia+Gruesa+Libre' rel='stylesheet' type='text/css'>
+<link rel="stylesheet" type="text/css" href="spectrum.css">
+<meta name="description" content="Spectrum is an application utilizing Facebook APIs to provide you a birds eye view of all your friends on Facebook. Spectrum now includes Facebook Search which utilizes Facebook's Graph Search to look for content in real-time.">
+<script type="text/javascript">
+	google.load("visualization", "1", {packages:["corechart"]});
+	google.load("visualization", "1", {packages:["table"]});
+	google.load("visualization", "1");
+	google.load("jquery", "1.4.4");
+	google.load("search", "1");
+</script>
+<script type="text/javascript" src="highcharts.js"></script>
+
+<!--
+<script type="text/javascript" src="highchartsoptions.js"></script>
+-->
+
+<script type="text/javascript" src="closure.js?v=093013"></script>
+
+<script language="Javascript">
+
+	function switchTab(tab) {
+		log('switchTab called for '+tab);
+		window.location.hash = tab;
+
+		$('.tab').each(function(index) {
+			$(this).removeClass('selected');
+			if($(this).text().toLowerCase()==tab)
+				$(this).addClass('selected');
+		});
+
+		if(userLoggedIn) {
+			$('.block').each(function(index) {
+				$(this).removeClass('show');
+				$(this).addClass('hide');
+				if($(this).attr('id')==tab+'Block') {
+					$(this).removeClass('hide');
+					$(this).addClass('show');
+				}
+			});
+
+
+			if(tab=='home') {
+
+			} else if(tab=='friends') {
+				displayFriendSphere();
+			} else if(tab=='timeline') {
+				displayTimeline();
+			} else if(tab=='birthday') {
+				displayBirthdayInfo();
+			} else if(tab=='location') {
+				displayLocationInfo();
+			} else if(tab=='albums') {
+				displayAlbumInfo();
+			} else if(tab=='mutuals') {
+				displayMutualFriendInfo();
+				displayMutualLikesInfo();
+			} else if(tab=='totals') {
+				displayTotals();
+			} else if(tab=='other') {
+				drawGenderChart();
+				drawEducationChart();
+			} else if(tab=='search') {
+				//anything specific to search?
+			} else if(tab=='activity') {
+				captureActivityMetrics();
+				//displayActivityChart();
+			} else if(tab=='download') {
+
+			} else if(tab=='more') {
+
+			} else {
+				//This might be FAQ page
+			}
+		} else {
+			if(tab=='faq' || tab=='home' || tab=='search') {
+				$('.block').each(function(index) {
+					$(this).removeClass('show');
+					$(this).addClass('hide');
+				});
+
+				$('#'+tab+'Block').removeClass('hide');
+				$('#'+tab+'Block').addClass('show');
+			}
+		}
+
+	}
+
+	var lastHash = '';
+	function pollHash() {
+	    if(lastHash !== location.hash) {
+	        lastHash = location.hash;
+	        // hash has changed, load the content:
+	        //alert(lastHash);
+	        switchTab(lastHash.substring(1));
+	    }
+	}
+	//Poll for back button changes
+	setInterval(pollHash, 100);
+
+
+	function showLoadingMessage(){
+		var maskHeight = $(document).height();
+	    var maskWidth = $(document).width();
+	    $('#mask').css({'top':0, 'left':0, 'width':maskWidth,'height':maskHeight});
+	    var winH = $(window).height();
+        var winW = $(window).width();
+        //Center the popup window to center the window
+        $('#lightbox-panel').css('top',  winH/2-$('#lightbox-panel').height()/2);
+        $('#lightbox-panel').css('left', winW/2-$('#lightbox-panel').width()/2);
+
+		$("#mask, #lightbox-panel").fadeIn(300);
+	}
+
+	function checkContentsLoaded() {
+		if(AlbumsLoaded) {
+			hideLoadingMessage();
+		} else {
+			window.setTimeout("checkContentsLoaded();", 500);
+		}
+	}
+
+	function startLoadingContents() {
+		showLoadingMessage();
+		userGreeting();
+		loadProfileData();
+		checkContentsLoaded();
+	}
+
+	function hideLoadingMessage(){
+	 	$("#mask, #lightbox-panel").fadeOut(300);
+	}
+
+	function displayRefreshText() {
+		$("#mask, #lightbox-panel").append('Oops.. Something went wrong. Please <a href="javascript:window.location.reload()">refresh</a> the page');
+	}
+
+	window.setTimeout('displayRefreshText()', 30000);
+
+</script>
+
+</head>
+<body>
+
+<div style="position: fixed;margin: 5px;width: 100%;text-align: center;z-index:100">
+	<div style="width: 500px;margin: auto;padding: 10px;color: rgb(130, 98, 0);border: 2px solid rgb(255, 194, 55);background-color: rgb(255, 234, 168);">
+		Facebook made massive changes to its Graph API restricting the access to its data. <br>
+		This app will no longer be accessible from April 30th 2015 <a href="https://developers.facebook.com/docs/apps/upgrading" target="new">More</a>
+	</div>
+</div>
+
+<div id="lightbox-panel">
+	<img src="ajax-loader.gif" align="left" style="margin-top:12px;margin-right:15px;vertical-align:text-top"><h2>Loading, Please wait...</h2>
+</div>
+<div id="mask"></div>
+
+<table width="100%" cellpadding="0" cellspacing="0">
+	<tr>
+		<td width="50%">&nbsp;</td>
+			<td width="400" align="right" style="width:400px;padding-right:25px">
+				<fb:login-button autologoutlink="true" scope="friends_photos,friends_location,friends_birthday,read_stream,friends_education_history,friends_likes"></fb:login-button>
+			</td>
+		</tr>
+</table>
+<div class="heading">
+	<div style="height:105px;position:relative">
+		<img src="chart.png" style="margin-left:20px" width="100" height="100">&nbsp; <span style="color:#111111;position:absolute;font-size:48px;bottom:15px;left:130px;font-family: 'Averia Gruesa Libre', cursive;">Spectrum</span>
+		<div style="position:absolute;float:right;right:10px;bottom:5px;width:510px;height:20px">
+
+			<!--
+			<a href="http://twitter.com/share" class="twitter-share-button" data-count="vertical">Tweet</a><script type="text/javascript" src="http://platform.twitter.com/widgets.js"></script>
+			-->
+
+			<div style="width:230px;height:16px;float:right">
+				<!-- AddToAny BEGIN -->
+				<div class="a2a_kit a2a_default_style">
+				<a class="a2a_dd" href="http://www.addtoany.com/share_save?linkurl=http%3A%2F%2Fwww.facebookspectrum.com%2F&amp;linkname=Facebook%20Spectrum">Share</a>
+				<span class="a2a_divider"></span>
+				<a class="a2a_button_facebook"></a>
+				<a class="a2a_button_twitter"></a>
+				<a class="a2a_button_reddit"></a>
+				<a class="a2a_button_digg"></a>
+				<a class="a2a_button_delicious"></a>
+				<a class="a2a_button_myspace"></a>
+				<a class="a2a_button_google_buzz"></a>
+				<a class="a2a_button_orkut"></a>
+				</div>
+				<script type="text/javascript">
+				var a2a_config = a2a_config || {};
+				a2a_config.linkname = "Spectrum";
+				a2a_config.linkurl = "http://www.facebookspectrum.com/";
+				a2a_config.onclick = 1;
+				a2a_config.num_services = 6;
+				</script>
+				<script type="text/javascript" src="http://static.addtoany.com/menu/page.js"></script>
+				<!-- AddToAny END -->
+			</div>
+
+			<div style="width:140px;float:right">
+				<fb:like href="http://www.facebookspectrum.com" layout="button_count" show_faces="false" send="true" width="160"></fb:like>
+			</div>
+			<div style="width:70px;float:right">
+				<g:plusone href="http://www.facebookspectrum.com" size="medium" annotation="bubble"></g:plusone>
+			</div>
+		</div>
+	</div>
+</div>
+
+
+<table width="100%" height="100%" cellpadding="0" cellspacing="0">
+	<tr>
+		<td width="100" style="background-color:#e8eef7" valign="top">
+			<ul id="menu">
+				<li class="tab selected" onclick="switchTab('home');">Home</li>
+				<li class="tab" onclick="switchTab('friends');">Friends</li>
+				<li class="tab" onclick="switchTab('timeline');">Timeline</li>
+				<li class="tab" onclick="switchTab('birthday');">Birthday</li>
+				<li class="tab" onclick="switchTab('location');">Location</li>
+				<li class="tab" onclick="switchTab('albums');">Albums</li>
+				<li class="tab" onclick="switchTab('other');">Other</li>
+				<li class="tab" onclick="switchTab('totals');">Totals</li>
+				<li class="tab" onclick="switchTab('mutuals');">Mutuals</li>
+				<li class="tab" onclick="switchTab('activity');">Activity</li>
+				<li class="tab" onclick="switchTab('search');">Search</li>
+				<li class="tab" onclick="switchTab('download');">Download</li>
+				<li class="tab" onclick="switchTab('more');">More</li>
+				<li class="tab" onclick="switchTab('faq');">FAQ</li>
+			</ul>
+		</td>
+		<td width="90%" valign="top" style="padding:10px;border-right:4px solid #FFFFFF">
+
+			<div class="block show" id="homeBlock">
+				<!--homeBlock-->
+				<div style="margin:20px">
+					<p><div id="welcomeMsg"></div></p>
+					<p>Thank you for trying out <b>Spectrum</b>. Spectrum is an application utilizing Facebook APIs to provide you a birds eye view of all your friends on facebook.</p>
+					<p>You will need to be logged in to Facebook to access this application. Please check the FAQ section for more information. <br>
+					<p>
+						Here are some of the details you can get from the application:<br>
+						<ul>
+						<li> Where your friends are located on a Google map </li>
+						<li> A timeline view of your or your friends’ posts with thumbnails </li>
+						<li> A 3D spherical view of all your friends.. </li>
+						<li> Who among your friends has the most number of albums? </li>
+						<li> Who among your friends has the most number of pictures? </li>
+						<li> Whose profile is the most active in the last 30 days? </li>
+						<li> How many mutual friends do you share with your FB friends? </li>
+						<li> How many of your friends like what you like? </li>
+						<li> A calendar view to disply your friends birthdays, Also gives you a list of upcoming birthdays </li>
+						<li> How your friends are distributed with respect to gender </li>
+						<li> How your friends are distributed with respect to education </li>
+						<li> Search Facebook messages in real-time</li>
+						<!-- <li> Download your Spectrum as a PDF <sup style="color:#FF0000">new</sup></li> -->
+						</ul>
+						.. and much more..
+					</p>
+					<p>Feel free to share it with your friends and I appreciate your valuable feedback..</p>
+					<!--  
+					<p>Facebook Real-time search is now available on Android
+						<a href="http://market.android.com/details?id=com.udaysasi.android.facebook.realtimesearch" target="new">
+						  <img src="http://www.android.com/images/brand/45_avail_market_logo2.png"
+							   alt="Available in Android Market" />
+						</a>
+					</p>
+					-->
+				</div>
+			</div>
+			<div class="block hide" id="friendsBlock">
+				<!--<div style="width:600px;text-align:center" align="center">A 3-D view of all your friends</div>-->
+				<div id="friendsSphere"></div>
+				<div style="clear:both"></div>
+				<p>Here is a list of all your friends in the order they created their accounts on Facebook. Ever wondered who jumped in on the Facebook wagon first? Here is your answer.. </p><br>
+				<!--friendsBlock-->
+			</div>
+			<div class="block hide" id="downloadBlock">
+				<!--downloadBlock-->
+				<p>
+					<br>
+					If you wanted to save a copy of your Spectrum information(which include charts and other features on this website), You now have the option to download a PDF version of your Spectrum.
+					<br><br>
+					Please choose the sections of the webpage you want to export and click on the <b>Download</b> button. Please note that the download may take some time depending on the network connection and the number of friends you have.
+					<br><br>
+
+					<label style="white-space: nowrap;"><input type="checkbox" name="exportitems" value="user">Friends List (A list of all my friends)</label><br>
+					<label style="white-space: nowrap;"><input type="checkbox" name="exportitems" value="album">Album Chart (Top 10 friends with most number of albums)</label><br>
+					<label style="white-space: nowrap;"><input type="checkbox" name="exportitems" value="photo">Photo Chart (Top 10 friends with most number of pictures)</label><br>
+					<label style="white-space: nowrap;"><input type="checkbox" name="exportitems" value="gender">Gender Distribution Chart</label><br>
+					<label style="white-space: nowrap;"><input type="checkbox" name="exportitems" value="education">Education Distribution Chart</label><br>
+					<label style="white-space: nowrap;color:#777777"><input type="checkbox" disabled=true name="exportitems" value="messages">All my messages posted on Facebook(Coming soon)</label><br>
+					<label style="white-space: nowrap;color:#777777"><input type="checkbox" disabled=true name="exportitems" value="location">Location Map of all my friends(Coming soon)</label><br>
+					<br>
+					<input type="button" value="Download" id="exportbutton" onclick="exportContentsToPdf();"> &nbsp;<span id="exportmsg" style="display:none"><img src='loading.gif'>&nbsp;Generating a PDF version of your Spectrum. Please wait.. </span>
+				</p><br>
+			</div>
+			<div class="block hide" id="otherBlock">
+				<!--otherBlock-->
+				<div style="float:left;margin:15px;padding:15px;border:1px solid #e8eef7;width:600px">
+					<div id="highgender"></div>
+				</div>
+				<div style="float:left;margin:15px;padding:15px;border:1px solid #e8eef7;width:600px">
+					<div id="higheducation"></div>
+				</div>
+			</div>
+			<div class="block hide" id="searchBlock">
+				<!--searchBlock-->
+				<div style="margin:20px">
+					Facebook is one of the most active websites on the internet. It receives millions of posts every day. If you want to know what people are posting on Facebook at this moment, type your search query and hit Enter.
+					You would be able to see the most up-to-date and realtime feed of the posts as they are added to Facebook. Please note that this is not limited to your friends feed and will contain results from any of the 1+ billion users on Facebook.
+					<br>
+					<br>
+					<b>Looking for </b>: <input type="text" class="searchBox" id="searchStr" value="cricket"> <input type="button" class="searchButton" value="Search" onclick="searchFacebook();"><br>
+					<div id="searchResults">
+						<div class="item"></div>
+						<div class="item"></div>
+						<div class="item"></div>
+						<div class="item"></div>
+						<div class="item"></div>
+						<div class="item"></div>
+						<div class="item"></div>
+						<div class="item"></div>
+						<div class="item"></div>
+						<div class="item"></div>
+					</div>
+				</div>
+
+			</div>
+			<div class="block hide" id="moreBlock">
+				<!--moreBlock-->
+				<div style="margin:20px">
+					This is a hobby project for me. I will keep adding more features with time.. If you have any suggestions/comments, please post them on the <a href="https://www.facebook.com/pages/Spectrum/150086508438601" target="new">application page</a>.
+				</div>
+			</div>
+			<div class="block hide" id="activityBlock">
+				<!--activityBlock-->
+				<div style="margin:20px">
+					Some of your friends might have a very active facebook page with lots of status updates, video postings, photos and much more..
+					Looking at your news feed you might get an idea of who, among your friends, is more active, but here is your chance to see the proof of it..
+					The following chart displays the activity on the walls of all your facebook friends in the last 7 days.
+					You can also click on the legend items to eliminate the types of posts you are not interested in..<br><br>
+					<u>Note</u>: The chart might take some time to load if you have a lot of friends..
+					<br>
+					<span id="activityincompletemsg" style="color:#FF0000">The following chart might be incomplete, please wait while the complete chart loads..</span>
+					<br>
+					<div id="highactivity">Loading activity chart...</div>
+					<!--<div id="activityLog"></div>-->
+				</div>
+			</div>
+			<div class="block hide" id="mutualsBlock">
+				<!--mutualsBlock-->
+				<div id="mutuals"></div>
+				<div id="mutuallikes"></div>
+				<p>The following charts outline the details that you share in common with your friends..</p><br>
+				<div style="padding:15px;border:1px solid #e8eef7">
+					<div id="highfriends"></div>
+				</div>
+				<div style="margin-top:20px;padding:15px;border:1px solid #e8eef7">
+					<div id="highlikes"></div>
+				</div>
+			</div>
+			<div class="block hide" id="totalsBlock">
+				<!--totalsBlock-->
+				<div id="totals"></div>
+				<div id="totallikes"></div>
+				<p>The following charts display how your friends rank in terms of their friends and likes..</p><br>
+				<div style="padding:15px;border:1px solid #e8eef7">
+					<div id="hightotalfriends"></div>
+				</div>
+				<div style="margin-top:20px;padding:15px;border:1px solid #e8eef7">
+					<div id="hightotallikes"></div>
+				</div>
+			</div>
+			<div class="block hide" id="timelineBlock">
+				<!--timelineBlock-->
+				<div style="position:relative">
+					<div id="friendsList" style="position:absolute;float:right;top:5px;right:30px;">View timeline for </div>
+				</div>
+				<div style="clear:both"></div>
+				<br><br>
+				The following timeline displays a graphical view of your Facebook feed. You can see the posts and comments on your wall easily using the timeline.<br><br>
+				You can navigate the timeline by double clicking, dragging or using the arrow keys on your keyboard.<br><br>
+				If you are interested in the timeline view of any of your friends, please use the dropdown on the right.
+				<br><br>
+				<div id="timeline_div" style="position:relative;height:500px;width:100%;border:1px solid #445EEE;background-color:#e8eef7">
+					<div style="position:absolute; top:10px;right:10px; color:#112aba;padding:5px;font-weight:bold">Loading...</div>
+				</div>
+			</div>
+			<div class="block hide" id="birthdayBlock">
+				<!--birthdayBlock-->
+				<table border="0" cellspacing="0" cellpadding="0">
+					<tr valign="top">
+						<td colspan="2">
+							The birthdays of all your friends are highlighted on the calendar below. Click on a highlighted date or month to view the list of friends whose b'days fall during that time.<br><br>
+						</td>
+					</tr>
+					<tr valign="top">
+						<td style="width:670px">
+							<!-- Yearly Calendar goes here -->
+							<div id="calendar_div" style="float:left"></div>
+						</td>
+						<td style="border-left:4px solid #e8eef7">
+							<!-- Click on a date/month in the calendar and details load here..-->
+							<div id="upcoming_div_detail" style="float:left;margin-left:30px"></div>
+							<div style="clear:both"></div>
+							<div id="calendar_div_detail" style="margin-left:30px"></div>
+						</td>
+					</tr>
+				</table>
+				<div style="clear:both"></div>
+				<div id="calendar_div_table" style="margin-top:20px;"></div>
+			</div>
+			<div class="block hide" id="locationBlock">
+				<!--locationBlock-->
+				The followig map displays the location of all your Facebook friends. The map can take some time to load if you have a lot of friends on Facebook. <br><br>
+				The markers on the map display the number of friends located in the city marked. <br><br>
+				<div id="map_canvas" style="width:99%;height:500px;position:relative;border:1px solid #112aba;background-color:#e8eef7">
+					<div id="waiting" style="position:absolute; top:10px;right:10px;background-color:#e8eef7; color:#112aba;padding:5px;font-weight:bold">Loading...</div>
+				</div>
+				<div id="location_div_table" style="margin-top:20px;"></div>
+			</div>
+			<div class="block hide" id="albumsBlock">
+				<!-- Ooops.. Information currently unavailable, Sorry for the inconvenience, Please try again later.. -->
+				<!--albumsBlock-->
+				<table border="0" cellspacing="0" cellpadding="0">
+					<tr valign="top">
+						<td colspan="2">
+							<p>The following pie charts display your top 10 friends with the most number of albums or photos. You can click on a slice on the pie chart to display more information.</p>
+							<p>If you want to see any of your friends' albums, please use the dropdown on the right. </p><br><br>
+						</td>
+					</tr>
+					<tr valign="top">
+						<td width="670px">
+							<div style="padding:15px;margin-right:10px;border:1px solid #e8eef7">
+								<div id="highalbums"></div>
+							</div>
+							<div style="margin-top:20px;margin-right:10px;padding:15px;border:1px solid #e8eef7">
+								<div id="highphotos"></div>
+							</div>
+						</td>
+						<td width="100%" align="left" style="border-left:4px solid #e8eef7">
+							<div style="position:relative">
+								<div id="friendsAlbumList" style="position:absolute;top:5px;right:20px;">View albums for </div>
+							</div>
+							<div style="clear:both"></div>
+							<br><br><br><br>
+							<div id="album_detail" style="float:left;margin-left:30px"></div>
+						</td>
+					</tr>
+				</table>
+			</div>
+			<div class="block hide" id="faqBlock">
+
+				<div style="margin-left:-10px;">Here are some of the questions you might have regarding the use of this application. The answers to the most common concerns and frequently asked questions are given below.</div>
+
+				<div class="faq">What is Spectrum and what does it do?</div>
+					This application is a mash-up of several APIs and web services to give more insights to your facebook account. It gives a consolidated view of your facebook friends and their content.
+
+				<div class="faq">How do I login to Spectrum?</div>
+					There is no seperate login for the application. You need to be logged in to Facebook to access the application. If you are not logged in, a login button is provided at the top of the page to login to Facebook.
+
+				<div class="faq">Is it safe to enter my userid and password?</div>
+					Yes. This application does not authenticate you by itself, it redirects you to a popup window provided by Facebook and the authentication is completely done between you and facebook.com. When you authorize access to Spectrum, it can then request facebook.com to get the relevant information that is required to display this webpage. None of it is stored anywhere.
+
+				<div class="faq">Why do I need to give access to the application?</div>
+					This application talks to facebook to get the required information to display the webpage. Facebook does not make any of your information available to the application without you granting the permission.
+
+				<div class="faq">Is my information secure?</div>
+					Yes. Your information is very much secure. All your Facebook content that you see on this application is downloaded on demand once you grant required permissions. You will not see any content that you are not authorized to see.
+
+				<div class="faq">Do you store the information that I see on this website?</div>
+					Absolutely not. None of the information you see on this website is stored anywhere. Once you are done with the webpage, you can click logout to disconnect from Facebook. The application can no longer access any information thereafter. <br><br>
+					For those who understand the technical jargon, this application does not have a database, not does store your information in cookies. All the information is retrieved on demand from facebook via Facebook APIs and is dispalyed in a much readable form.
+
+				<div class="faq">What about spam?</div>
+					Spectrum does not retrieve your email address or contact details from your account on Facebook. You could clearly see that in the list of permissions you need to grant this application when you login. There is absolutely no intention of spam so this application completely stays away from your email or phone details.
+
+				<div class="faq">Can I see the information of any facebook user in this application?</div>
+					Of course not. You can only access the information of your friends on Facebook. Also, If your friend does not grant you access to some of his/her information, you will not be able to see that as information as well.
+
+				<div class="faq">What components are used in this application?</div>
+					Spectrum makes use of variuos open-source APIs available out there. Some of which are outlined below.
+					<ul>
+						<li>Facebook Graph API</li>
+						<li>Google Maps API</li>
+						<li>Google Visualization API</li>
+						<li>Google Chart API</li>
+						<li>Simile Timeline API</li>
+					</ul>
+
+				<div class="faq">How do I report issues, comments or concerns?</div>
+					Spectrum was developed as a hobby and it would be great if you can give your valuable feedback on the same. Please post your comments on the <a href="https://www.facebook.com/pages/Spectrum/150086508438601" target="new">application page</a>.
+			</div>
+		</td>
+
+		<td>
+			<div style="width:130px;align:right" id="extraContent">
+				<br>
+				<script type="text/javascript"><!--
+				google_ad_client = "ca-pub-9983113299815649";
+				/* FacebookSpectrum */
+				google_ad_slot = "1124614070";
+				google_ad_width = 120;
+				google_ad_height = 600;
+				//-->
+				</script>
+				<script type="text/javascript"
+				src="http://pagead2.googlesyndication.com/pagead/show_ads.js">
+				</script>
+			</div>
+		</td>
+
+	</tr>
+</table>
+
+<div class="footer">[Spectrum is not affiliated with Facebook]</div>
+
+<div style="display:none">
+<span>Debug Log:</span><a href="javascript:void(0);" onclick="document.getElementById('debugLog').innerHTML='';">Clear</a>
+<div id="debugLog" style="width:600px;height:100px;overflow:scroll;border:2px solid#638254;display:none"></div>
+</div>
+
+<div id="fb-root"></div>
+	<script type="text/javascript">
+		window.fbAsyncInit = function() {
+			var friendId = 0;
+			FB.init({appId: '132839880113484', status: true, cookie: true,
+					 xfbml: true});
+
+			FB.getLoginStatus(function(response) {
+				//alert('FB.getLoginStatus = '+response.session+' - '+response.status+' - '+response.perms);
+				if (response.authResponse && response.authResponse.accessToken) {
+					// logged in and connected user, someone you know
+					//alert('getLoginStatus '+response.session);
+					userAccessToken = response.authResponse.accessToken;
+					if(!userLoggedIn) {
+						userLoggedIn = true;
+						startLoadingContents();
+					}
+				} else {
+				    // no user session available, someone you dont know
+				}
+			});
+
+			FB.Event.subscribe('auth.authResponseChange', function(response) {
+				if (response.authResponse && response.authResponse.accessToken) {
+					// A user has logged in, and a new cookie has been saved
+					//alert('sessionChange '+response.session);
+					userAccessToken = response.authResponse.accessToken;
+					if(!userLoggedIn) {
+						userLoggedIn = true;
+						startLoadingContents();
+					}
+				    //window.location.reload();
+				    //reload window upon login and set session
+				} else {
+					// The user has logged out, and the cookie has been cleared
+					//alert('user logged out..');
+				    window.location.reload();
+				    //reload the page and clear the cookie
+				}
+			});
+
+		};
+		(function() {
+			var e = document.createElement('script');
+			e.type = 'text/javascript';
+			e.src = document.location.protocol +'//connect.facebook.net/en_US/all.js';
+			e.async = true;
+			document.getElementById('fb-root').appendChild(e);
+		}());
+
+		function userGreeting() {
+			FB.api('/me', function(response) {
+				document.getElementById('welcomeMsg').innerHTML += '<br>Welcome <b>'+response.name+'</b>';
+				loggedInUserId = response.id;
+				loggedInUserName = response.name;
+			});
+		}
+
+		function loadProfileData() {
+			FB.api('/me/friends?fields=id,name,location,birthday,picture,gender,education', function(response) {
+				//document.getElementById('welcomeMsg').innerHTML += 'You have '+response.data.length+' friends';
+				for(var i=0;i<response.data.length;i++) {
+
+					friends[response.data[i].id] = response.data[i].name;
+
+					//Location Information
+					var loc = 'Unknown';
+					if(response.data[i].location) {
+						loc = (response.data[i].location.name==null)?'Unknown':response.data[i].location.name;
+					}
+					if(locationInfo[loc])
+						locationInfo[loc][locationInfo[loc].length] = response.data[i].id;
+					else {
+						locationInfo[loc] = [];
+						locationInfo[loc][0] = response.data[i].id;
+					}
+
+					//Birthday Information
+					var bmonth = 'Unknown'; var bday = 'Unknown';
+					if(response.data[i].birthday) {
+						var birthday = response.data[i].birthday;
+						bmonth = parseInt(birthday.substring(0,2),10);
+						bday = parseInt(birthday.substring(3,5),10);
+					}
+					if(birthdayInfo[bmonth]) {
+						if(birthdayInfo[bmonth][bday])
+							birthdayInfo[bmonth][bday][birthdayInfo[bmonth][bday].length] = response.data[i].id;
+						else {
+							birthdayInfo[bmonth][bday] = [];
+							birthdayInfo[bmonth][bday][0] = response.data[i].id;
+						}
+					}
+					else {
+						birthdayInfo[bmonth] = [];
+						birthdayInfo[bmonth][bday] = [];
+						birthdayInfo[bmonth][bday][0] = response.data[i].id;
+					}
+
+					//Picture Information
+					//Old : response.data[i].picture;
+					pictureInfo[response.data[i].id] = response.data[i].picture.data.url; 
+					
+
+					//Education Information
+					var edu = 'Unknown';
+					if(response.data[i].education) {
+						var max = response.data[i].education.length;
+						edu = (response.data[i].education[max-1].type==null)?'Unknown':response.data[i].education[max-1].type;
+					}
+					if(educationInfo[edu])
+						educationInfo[edu][educationInfo[edu].length] = response.data[i].id;
+					else {
+						educationInfo[edu] = [];
+						educationInfo[edu][0] = response.data[i].id;
+					}
+
+					//Gender Information
+					var gender = 'Unknown';
+					if(response.data[i].gender) {
+						gender = initCaps(response.data[i].gender);
+					}
+					if(!genderInfo[gender])
+						genderInfo[gender] = [];
+					genderInfo[gender][genderInfo[gender].length] = response.data[i].id;
+
+					//TODO:Debug only - Remove Later
+					//if(i>15)
+					//	break;
+				}
+
+				captureAlbumInfo();
+				displayAllFriends();
+				createFriendsDropdown();
+				geocodeAllAddresses();
+				loadLikesInfo();
+
+/*
+				(function() {
+					captureAlbumInfo();
+				})();
+
+				(function() {
+					displayAllFriends();
+				})();
+
+				(function() {
+					geocodeAllAddresses();
+				})();
+
+				(function() {
+					createFriendsDropdown();
+				})();
+
+				(function() {
+					loadLikesInfo();
+				})();
+*/
+
+
+			});
+		}
+
+	</script>
+
+	<!-- Google Analytics -->
+	<script type="text/javascript">
+
+	  var _gaq = _gaq || [];
+	  _gaq.push(['_setAccount', 'UA-1214589-24']);
+	  _gaq.push(['_trackPageview']);
+
+	  (function() {
+		var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+		ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+		var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+	  })();
+
+	</script>
+
+</body>
+</html>
